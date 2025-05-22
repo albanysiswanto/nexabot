@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from dotenv import load_dotenv
 import discord
 from discord.ext import commands
@@ -34,6 +35,16 @@ except FileNotFoundError:
 except KeyError:
     print("Error: Format 'toxic_words_indonesia.json' tidak valid. Pastikan ada key 'toxic_words' yang berisi list kata-kata.")
     TOXIC_WORDS = set()
+
+# Membuat pola regex untuk mencocokkan kata-kata toxic dengan batasan kata
+def create_toxic_pattern():
+    # Escaping kata-kata toxic untuk regex dan tambahkan word boundaries (\b)
+    escaped_words = [re.escape(word) for word in TOXIC_WORDS]
+    # Gabungkan semua kata dengan OR (|) untuk regex
+    pattern = r'\b(' + '|'.join(escaped_words) + r')\b'
+    return re.compile(pattern, re.IGNORECASE)
+
+toxic_pattern = create_toxic_pattern() if TOXIC_WORDS else None
 
 # Inisialisasi bot Discord
 intents = discord.Intents.default()
@@ -152,8 +163,9 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    content = message.content.lower()
-    if any(word in content for word in TOXIC_WORDS):
+    # Deteksi kata toxic menggunakan regex
+    content = message.content
+    if toxic_pattern and toxic_pattern.search(content):
         await message.delete()
         await message.channel.send(f'{message.author.mention}, pesan Anda telah dihapus karena mengandung kata toxic. Harap hindari penggunaan bahasa tersebut!')
         log_channel = log_channels.get(message.guild.id)
@@ -166,6 +178,7 @@ async def on_message(message):
 flask_thread = threading.Thread(target=run_flask)
 flask_thread.start()
 
+# Menjalankan bot
 token = os.getenv("DISCORD_BOT_TOKEN")
 if not token:
     raise ValueError("Environment variable bot_TOKEN belum di-set!")
